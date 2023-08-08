@@ -21,6 +21,7 @@ import os, sys
 # sys.path.append(base_dir)
 # print(f"> base dir path is {base_dir}")
 
+import queue
 import signal
 import time
 import schedule  # pip install schedule
@@ -63,7 +64,17 @@ def run(arguments):
         exitHandler 优雅退出处理函数
         """
         print(f"WARN: Catch single:{sig}, shutdown pool and waited running workers now ...")
-        pool.shutdown(wait=True, cancel_futures=True)  # 停止线程池，wait=True:等待正在运行的线程/进程结束，cancel_futures=True:取消正在等待的线程/进程
+        if sys.version_info.minor >= 9: # python3.9 shutdown 才有 cancel_futures 参数
+            pool.shutdown(wait=True, cancel_futures=True)  # 停止线程池，wait=True:等待正在运行的线程/进程结束，cancel_futures=True:取消正在等待的线程/进程
+        else:
+            while True:
+                try:
+                    work_item = pool._work_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if work_item is not None:
+                    work_item.future.cancel()
+            pool.shutdown(wait=True)    
         print(f"WARN: All running threads was done, exit now")
         exit(0)
     
